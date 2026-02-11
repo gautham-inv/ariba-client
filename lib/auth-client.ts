@@ -2,9 +2,10 @@ import { createAuthClient } from "better-auth/react";
 import { organizationClient } from "better-auth/client/plugins";
 
 import { ac, roles } from "./permissions";
+import { API_BASE } from "./api";
 
 export const authClient = createAuthClient({
-    baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000",
+    baseURL: API_BASE,
     plugins: [
         organizationClient({
             ac,

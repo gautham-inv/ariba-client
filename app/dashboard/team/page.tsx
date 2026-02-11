@@ -9,6 +9,7 @@ import {
     Loader2,
     Clock
 } from "lucide-react";
+import { API_BASE } from "@/lib/api";
 
 interface Member {
     id: string;
@@ -42,7 +43,7 @@ export default function TeamPage() {
     const fetchMembers = async () => {
         try {
             setLoading(true);
-            const res = await fetch(`http://localhost:3000/organization/members`, {
+            const res = await fetch(`${API_BASE}/organization/members`, {
                 credentials: "include"
             });
             if (res.ok) {

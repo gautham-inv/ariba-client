@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useActiveOrganization, useSession } from "@/lib/auth-client";
+import { API_BASE } from "@/lib/api";
 
 interface Supplier {
     id: string;
@@ -94,7 +95,7 @@ export default function CreateRFQPage() {
         if (!activeOrg) return;
         setLoadingSuppliers(true);
         try {
-            const res = await fetch(`http://localhost:3000/suppliers/org/${activeOrg.id}`, {
+            const res = await fetch(`${API_BASE}/suppliers/org/${activeOrg.id}`, {
                 credentials: "include"
             });
             if (res.ok) {
@@ -141,7 +142,7 @@ export default function CreateRFQPage() {
 
         setSubmitting(true);
         try {
-            const res = await fetch("http://localhost:3000/rfq", {
+            const res = await fetch(`${API_BASE}/rfq`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "include",

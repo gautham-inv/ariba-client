@@ -14,6 +14,7 @@ import {
     Loader2
 } from "lucide-react";
 import Link from "next/link";
+import { API_BASE } from "@/lib/api";
 
 interface Notification {
     id: string;
@@ -54,7 +55,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     const fetchNotifications = async () => {
         try {
-            const res = await fetch('http://localhost:3000/organization/notifications', {
+            const res = await fetch(`${API_BASE}/organization/notifications`, {
                 credentials: 'include'
             });
             if (res.ok) {

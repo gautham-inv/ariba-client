@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { API_BASE } from "@/lib/api";
 
 interface PurchaseOrder {
     id: string;
@@ -54,7 +55,7 @@ export default function PurchaseOrdersPage() {
         if (!activeOrg) return;
         setLoading(true);
         try {
-            const res = await fetch(`http://localhost:3000/purchase-orders/org/${activeOrg.id}`, {
+            const res = await fetch(`${API_BASE}/purchase-orders/org/${activeOrg.id}`, {
                 credentials: "include"
             });
             if (res.ok) {

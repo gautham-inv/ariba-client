@@ -11,6 +11,7 @@ import {
     Trash2,
     AlertCircle
 } from "lucide-react";
+import { API_BASE } from "@/lib/api";
 
 interface ApprovalRule {
     id: string;
@@ -41,7 +42,7 @@ export default function SettingsPage() {
         if (!activeOrg) return;
         setLoading(true);
         try {
-            const res = await fetch(`http://localhost:3000/approvals/rules/${activeOrg.id}`, {
+            const res = await fetch(`${API_BASE}/approvals/rules/${activeOrg.id}`, {
                 credentials: 'include'
             });
             if (res.ok) {
@@ -60,7 +61,7 @@ export default function SettingsPage() {
         if (!activeOrg) return;
 
         try {
-            const res = await fetch(`http://localhost:3000/approvals/rules`, {
+            const res = await fetch(`${API_BASE}/approvals/rules`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',

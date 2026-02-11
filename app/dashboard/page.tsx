@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { API_BASE } from "@/lib/api";
 
 interface RFQShort {
     id: string;
@@ -78,7 +79,7 @@ export default function Dashboard() {
 
     const fetchApprovalsCount = async () => {
         try {
-            const res = await fetch(`http://localhost:3000/approvals/pending/${activeOrg!.id}`, {
+            const res = await fetch(`${API_BASE}/approvals/pending/${activeOrg!.id}`, {
                 credentials: "include"
             });
             if (res.ok) {
@@ -94,7 +95,7 @@ export default function Dashboard() {
         if (!activeOrg) return;
         setLoadingSuppliers(true);
         try {
-            const res = await fetch(`http://localhost:3000/suppliers/org/${activeOrg.id}`, {
+            const res = await fetch(`${API_BASE}/suppliers/org/${activeOrg.id}`, {
                 credentials: "include"
             });
             if (res.ok) {
@@ -112,7 +113,7 @@ export default function Dashboard() {
         if (!activeOrg) return;
         setLoadingRfqs(true);
         try {
-            const res = await fetch(`http://localhost:3000/rfq/org/${activeOrg.id}`, {
+            const res = await fetch(`${API_BASE}/rfq/org/${activeOrg.id}`, {
                 credentials: "include"
             });
             if (res.ok) {

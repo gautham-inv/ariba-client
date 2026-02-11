@@ -11,6 +11,7 @@ import {
     FileText,
     DollarSign
 } from "lucide-react";
+import { API_BASE } from "@/lib/api";
 
 interface ApprovalRequest {
     id: string;
@@ -43,7 +44,7 @@ export default function ApprovalsPage() {
         if (!activeOrg) return;
         setLoading(true);
         try {
-            const res = await fetch(`http://localhost:3000/approvals/pending/${activeOrg.id}`, {
+            const res = await fetch(`${API_BASE}/approvals/pending/${activeOrg.id}`, {
                 credentials: "include"
             });
             if (res.ok) {
@@ -62,7 +63,7 @@ export default function ApprovalsPage() {
 
         setProcessingId(id);
         try {
-            const res = await fetch(`http://localhost:3000/approvals/${id}/${action}`, {
+            const res = await fetch(`${API_BASE}/approvals/${id}/${action}`, {
                 method: 'POST',
                 credentials: 'include'
             });

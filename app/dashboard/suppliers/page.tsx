@@ -11,6 +11,7 @@ import {
     MoreHorizontal,
     Trash2
 } from "lucide-react";
+import { API_BASE } from "@/lib/api";
 
 interface Supplier {
     id: string;
@@ -42,7 +43,7 @@ export default function SuppliersPage() {
         if (!activeOrg) return;
         setLoading(true);
         try {
-            const res = await fetch(`http://localhost:3000/suppliers/org/${activeOrg.id}`, {
+            const res = await fetch(`${API_BASE}/suppliers/org/${activeOrg.id}`, {
                 credentials: "include"
             });
             if (res.ok) {
@@ -62,7 +63,7 @@ export default function SuppliersPage() {
 
         setCreatingState(true);
         try {
-            const res = await fetch('http://localhost:3000/suppliers', {
+            const res = await fetch(`${API_BASE}/suppliers`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: "include",

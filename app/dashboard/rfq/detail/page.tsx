@@ -18,8 +18,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useSession } from "@/lib/auth-client";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+import { API_BASE } from "@/lib/api";
 
 interface RFQItem {
     id: string;

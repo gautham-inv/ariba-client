@@ -5,8 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { organization, useSession, signIn, signUp, signOut } from "@/lib/auth-client";
 import { Loader2, CheckCircle2, XCircle, Building2, UserPlus, ShieldCheck, Lock, Mail } from "lucide-react";
 import Link from "next/link";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+import { API_BASE } from "@/lib/api";
 
 function AcceptInvitationContent() {
     const searchParams = useSearchParams();
