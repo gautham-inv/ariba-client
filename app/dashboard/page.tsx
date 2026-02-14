@@ -46,6 +46,10 @@ export default function Dashboard() {
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
     const [loadingSuppliers, setLoadingSuppliers] = useState(false);
 
+    // Activity log state
+    const [activityItems, setActivityItems] = useState<{ id: string; title: string; message: string; type: string; createdAt: string }[]>([]);
+    const [activityLoading, setActivityLoading] = useState(false);
+
     // Quick Action State
     const [inviteEmail, setInviteEmail] = useState("");
     const [inviteRole, setInviteRole] = useState<"admin" | "procurement" | "approver">("procurement");
@@ -67,6 +71,7 @@ export default function Dashboard() {
 
     useEffect(() => {
         if (activeOrg) {
+            fetchActivity();
             if (canManageProcurement) {
                 fetchRFQs();
                 fetchSuppliers();
@@ -76,6 +81,23 @@ export default function Dashboard() {
             }
         }
     }, [activeOrg, role, canManageProcurement, canManageApprovals]);
+
+    const fetchActivity = async () => {
+        setActivityLoading(true);
+        try {
+            const res = await fetch(`${API_BASE}/organization/notifications`, {
+                credentials: 'include'
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setActivityItems(data);
+            }
+        } catch (err) {
+            console.error('Failed to fetch activity', err);
+        } finally {
+            setActivityLoading(false);
+        }
+    };
 
     const fetchApprovalsCount = async () => {
         try {
@@ -368,15 +390,15 @@ export default function Dashboard() {
                         </div>
                     )}
 
-                    {/* Secondary Widget: Quick Actions (Owner/Procurement) or Stats (Approver) */}
-                    {canManageProcurement ? (
-                        <div className="bg-white rounded-2xl shadow-sm border p-6">
-                            <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-                                <PlusCircle className="h-4 w-4 text-gray-500" />
-                                Quick Actions
-                            </h4>
-                            <div className="space-y-4">
-                                {isOwner && (
+                    {/* Secondary Widget: Recent Activity (all roles) + Quick Actions (owners) */}
+                    <div className="bg-white rounded-2xl shadow-sm border p-6 flex flex-col">
+                        {isOwner && (
+                            <div className="mb-6 pb-5 border-b border-dashed">
+                                <h4 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
+                                    <PlusCircle className="h-4 w-4 text-gray-500" />
+                                    Quick Actions
+                                </h4>
+                                <div className="space-y-3">
                                     <div>
                                         <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest pl-1">Invite Member</label>
                                         <div className="mt-1 flex gap-2">
@@ -399,29 +421,53 @@ export default function Dashboard() {
                                             <button onClick={handleInviteMember} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-indigo-700 transition-all">Invite</button>
                                         </div>
                                     </div>
-                                )}
-
-                                <div className="pt-4 border-t border-dashed">
-                                    <Link href="/dashboard/suppliers" className="w-full bg-indigo-50 text-indigo-700 py-3 rounded-xl text-sm font-bold hover:bg-indigo-100 transition-all border border-indigo-100 mb-3 block text-center">
-                                        + Add New Supplier / Vendor
-                                    </Link>
-                                    <Link href="/dashboard/rfq/create" className="w-full bg-white text-gray-700 py-3 rounded-xl text-sm font-bold hover:bg-gray-50 transition-all border border-gray-200 block text-center">
-                                        + Create New RFQ
-                                    </Link>
+                                    <div className="flex gap-2">
+                                        <Link href="/dashboard/suppliers" className="flex-1 bg-indigo-50 text-indigo-700 py-2.5 rounded-xl text-sm font-bold hover:bg-indigo-100 transition-all border border-indigo-100 block text-center">
+                                            + Add Supplier
+                                        </Link>
+                                        <Link href="/dashboard/rfq/create" className="flex-1 bg-white text-gray-700 py-2.5 rounded-xl text-sm font-bold hover:bg-gray-50 transition-all border border-gray-200 block text-center">
+                                            + Create RFQ
+                                        </Link>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    ) : (
-                        <div className="bg-white rounded-2xl shadow-sm border p-6">
+                        )}
+
+                        <div className="flex-1">
                             <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
                                 <Clock className="h-4 w-4 text-gray-500" />
                                 Recent Activity
                             </h4>
-                            <div className="p-10 text-center">
-                                <p className="text-gray-400 italic text-sm">No recent activity logs available.</p>
+                            <div className="space-y-3 max-h-[250px] overflow-y-auto pr-1">
+                                {activityLoading ? (
+                                    <div className="flex justify-center py-4">
+                                        <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
+                                    </div>
+                                ) : activityItems.length === 0 ? (
+                                    <p className="text-sm text-gray-400 italic py-6 text-center">No recent activity yet.</p>
+                                ) : (
+                                    activityItems.map((item) => (
+                                        <div key={item.id} className="flex items-start gap-3 p-3 rounded-xl border border-gray-100 hover:border-gray-200 transition-colors">
+                                            <div className={`mt-0.5 h-2 w-2 rounded-full flex-shrink-0 ${item.type === 'success' ? 'bg-green-500' :
+                                                item.type === 'info' ? 'bg-blue-500' :
+                                                    item.type === 'warning' ? 'bg-amber-500' :
+                                                        'bg-gray-400'
+                                                }`} />
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm font-semibold text-gray-900 truncate">{item.title}</p>
+                                                <p className="text-xs text-gray-500 mt-0.5 truncate">{item.message}</p>
+                                                <p className="text-[10px] text-gray-400 mt-1">
+                                                    {new Date(item.createdAt).toLocaleString(undefined, {
+                                                        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                                                    })}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
                             </div>
                         </div>
-                    )}
+                    </div>
                 </div>
 
             </div>
