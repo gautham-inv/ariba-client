@@ -79,10 +79,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   };
 
+  const markAllRead = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/organization/notifications/read-all`, {
+        method: 'POST',
+        credentials: 'include'
+      });
+      if (res.ok) {
+        // Optimistically update UI
+        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      }
+    } catch (err) {
+      console.error("Failed to mark notifications as read", err);
+    }
+  };
+
   const handleSignOut = async () => {
     await signOut();
     router.push("/sign-in");
   };
+
+  const unreadCount = notifications.filter(n => !n.read).length;
 
   if (isSessionPending || isActiveOrgPending) {
     return (
@@ -187,29 +204,48 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {/* Notifications */}
             <div className="relative" ref={notificationRef}>
               <button
-                onClick={() => setShowNotifications(!showNotifications)}
+                onClick={() => {
+                  if (!showNotifications) {
+                    markAllRead();
+                  }
+                  setShowNotifications(!showNotifications);
+                }}
                 className="relative p-2 rounded-full hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors"
               >
                 <Bell className="h-5 w-5" />
-                {notifications.some(n => !n.read) && (
-                  <span className="absolute top-1 right-1 h-2.5 w-2.5 bg-red-500 rounded-full border-2 border-white"></span>
+                {unreadCount > 0 && (
+                  <span className="absolute top-0 right-0 h-4 min-w-[16px] px-1 bg-red-500 text-white text-[10px] font-black rounded-full border-2 border-white flex items-center justify-center">
+                    {unreadCount}
+                  </span>
                 )}
               </button>
 
               {showNotifications && (
                 <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden z-50">
-                  <div className="p-4 border-b bg-gray-50">
+                  <div className="p-4 border-b bg-gray-50 flex items-center justify-between">
                     <h4 className="font-bold text-gray-900 text-sm">Notifications</h4>
+                    {unreadCount > 0 && (
+                      <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
+                        {unreadCount} new
+                      </span>
+                    )}
                   </div>
                   <div className="max-h-[300px] overflow-y-auto">
                     {notifications.length === 0 ? (
                       <p className="p-4 text-sm text-gray-500 text-center italic">No notifications</p>
                     ) : (
                       notifications.map(n => (
-                        <div key={n.id} className="p-4 border-b last:border-0 hover:bg-gray-50 transition-colors">
-                          <p className="text-sm font-medium text-gray-900">{n.title}</p>
-                          <p className="text-xs text-gray-600 mt-1">{n.message}</p>
-                          <p className="text-[10px] text-gray-400 mt-2">{new Date(n.createdAt).toLocaleDateString()}</p>
+                        <div key={n.id} className="p-4 border-b last:border-0 hover:bg-gray-50 transition-colors relative">
+                          {!n.read && <div className="absolute left-1 top-5 h-1.5 w-1.5 bg-indigo-600 rounded-full"></div>}
+                          <p className={`text-sm font-bold ${n.read ? 'text-gray-700' : 'text-gray-900'}`}>{n.title}</p>
+                          <p className="text-xs text-gray-600 mt-1 leading-relaxed">{n.message}</p>
+                          <div className="flex items-center justify-between mt-2">
+                            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">{new Date(n.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</p>
+                            <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded ${n.type === 'success' ? 'bg-green-50 text-green-600' :
+                              n.type === 'warning' ? 'bg-amber-50 text-amber-600' :
+                                'bg-indigo-50 text-indigo-600'
+                              }`}>{n.type}</span>
+                          </div>
                         </div>
                       ))
                     )}

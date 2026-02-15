@@ -187,9 +187,9 @@ function PODetailContent() {
                                 <h1 className="text-2xl font-black text-gray-900 tracking-tight flex items-center gap-3">
                                     Purchase Order
                                     <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${po.status === 'SENT' ? 'bg-blue-100 text-blue-700' :
-                                            po.status === 'APPROVED' ? 'bg-green-100 text-green-700' :
-                                                po.status === 'PENDING_APPROVAL' ? 'bg-amber-100 text-amber-700' :
-                                                    'bg-gray-100 text-gray-700'
+                                        po.status === 'APPROVED' ? 'bg-green-100 text-green-700' :
+                                            po.status === 'PENDING_APPROVAL' ? 'bg-amber-100 text-amber-700' :
+                                                'bg-gray-100 text-gray-700'
                                         }`}>
                                         {po.status}
                                     </span>
@@ -207,11 +207,17 @@ function PODetailContent() {
                                     Send to Supplier
                                 </button>
                             )}
-                            <button className="flex items-center gap-2 border border-gray-200 hover:bg-gray-50 px-4 py-2 rounded-xl text-sm font-bold transition-all">
+                            <button
+                                onClick={() => window.print()}
+                                className="flex items-center gap-2 border border-gray-200 hover:bg-gray-50 px-4 py-2 rounded-xl text-sm font-bold transition-all"
+                            >
                                 <Printer className="h-4 w-4" />
                                 Print / PDF
                             </button>
-                            <button className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-bold transition-all shadow-lg shadow-indigo-100">
+                            <button
+                                onClick={() => window.print()}
+                                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-bold transition-all shadow-lg shadow-indigo-100"
+                            >
                                 <Download className="h-4 w-4" />
                                 Download File
                             </button>
