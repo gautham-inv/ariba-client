@@ -277,7 +277,7 @@ function RFQDetailContent() {
                                         rfq.status === 'SENT' ? 'bg-blue-100 text-blue-700' :
                                             rfq.status === 'CLOSED' ? 'bg-green-100 text-green-700' :
                                                 'bg-gray-100 text-gray-700'
-                                    }`}>
+                                        }`}>
                                         {rfq.status}
                                     </span>
                                 </h1>
@@ -568,14 +568,14 @@ function RFQDetailContent() {
                                 <label className="block text-xs font-bold text-gray-800 uppercase tracking-wider mb-2">Total Bid Amount ({rfq.currency})</label>
                                 <div className="relative">
                                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                        <span className="text-gray-900 font-black">{rfq.currency}</span>
+                                        <span className="text-gray-900 font-black tracking-tight">{rfq.currency}</span>
                                     </div>
                                     <input
                                         type="number"
                                         placeholder="0.00"
                                         value={quoteAmount}
                                         onChange={(e) => setQuoteAmount(e.target.value)}
-                                        className="w-full bg-gray-50 border rounded-lg pl-12 pr-4 py-3 text-sm font-black text-gray-900 placeholder:text-gray-500 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
+                                        className="w-full bg-gray-50 border rounded-lg pl-20 pr-4 py-3 text-sm font-black text-gray-900 placeholder:text-gray-500 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
                                     />
                                 </div>
                             </div>
