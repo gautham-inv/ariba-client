@@ -52,7 +52,7 @@ export default function Dashboard() {
 
     // Quick Action State
     const [inviteEmail, setInviteEmail] = useState("");
-    const [inviteRole, setInviteRole] = useState<"admin" | "procurement" | "approver">("procurement");
+    const [inviteRole, setInviteRole] = useState<"procurement" | "approver">("procurement");
     const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
 
     const activeMemberRole = activeMember?.role || (activeOrg as any)?.membership?.role;
@@ -414,7 +414,7 @@ export default function Dashboard() {
                                                 onChange={(e) => setInviteRole(e.target.value as any)}
                                                 className="bg-gray-50 border-none rounded-lg px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-indigo-500 font-medium"
                                             >
-                                                <option value="admin">Admin</option>
+
                                                 <option value="procurement">Procurement</option>
                                                 <option value="approver">Approver</option>
                                             </select>
