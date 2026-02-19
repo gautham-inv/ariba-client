@@ -89,8 +89,8 @@ export default function Dashboard() {
                 credentials: 'include'
             });
             if (res.ok) {
-                const data = await res.json();
-                setActivityItems(data);
+                const result = await res.json();
+                setActivityItems(result.data || result);
             }
         } catch (err) {
             console.error('Failed to fetch activity', err);
@@ -105,8 +105,9 @@ export default function Dashboard() {
                 credentials: "include"
             });
             if (res.ok) {
-                const data = await res.json();
-                setPendingApprovalsCount(data.length);
+                const result = await res.json();
+                const actualData = result.data || result;
+                setPendingApprovalsCount(actualData.length);
             }
         } catch (e) {
             console.error(e);
@@ -121,8 +122,8 @@ export default function Dashboard() {
                 credentials: "include"
             });
             if (res.ok) {
-                const data = await res.json();
-                setSuppliers(data);
+                const result = await res.json();
+                setSuppliers(result.data || result);
             }
         } catch (err) {
             console.error("Failed to fetch suppliers", err);
@@ -139,8 +140,8 @@ export default function Dashboard() {
                 credentials: "include"
             });
             if (res.ok) {
-                const data = await res.json();
-                setRfqs(data);
+                const result = await res.json();
+                setRfqs(result.data || result);
             }
         } catch (err) {
             console.error("Failed to fetch RFQs", err);

@@ -10,7 +10,8 @@ import {
     ChevronRight,
     DollarSign,
     Calendar,
-    Briefcase
+    Briefcase,
+    Trash2
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -59,13 +60,34 @@ export default function PurchaseOrdersPage() {
                 credentials: "include"
             });
             if (res.ok) {
-                const data = await res.json();
-                setPos(data);
+                const result = await res.json();
+                setPos(result.data || result);
             }
         } catch (err) {
             console.error("Failed to fetch POs", err);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleDeletePO = async (id: string) => {
+        if (!confirm("Are you sure you want to delete this Purchase Order?")) return;
+
+        try {
+            const res = await fetch(`${API_BASE}/purchase-orders/${id}`, {
+                method: 'DELETE',
+                credentials: "include",
+            });
+
+            if (res.ok) {
+                fetchPOs();
+            } else {
+                const error = await res.json();
+                alert(error.message || "Failed to delete PO");
+            }
+        } catch (err) {
+            console.error("Failed to delete PO", err);
+            alert("Network error");
         }
     };
 
@@ -179,9 +201,18 @@ export default function PurchaseOrdersPage() {
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 text-right">
-                                                <Link href={`/dashboard/purchase-orders/detail?id=${po.id}`} className="text-gray-400 hover:text-indigo-600 transition-colors">
-                                                    <ChevronRight className="h-5 w-5" />
-                                                </Link>
+                                                <div className="flex items-center justify-end gap-2">
+                                                    <Link href={`/dashboard/purchase-orders/detail?id=${po.id}`} className="text-gray-400 hover:text-indigo-600 transition-colors">
+                                                        <ChevronRight className="h-5 w-5" />
+                                                    </Link>
+                                                    <button
+                                                        onClick={() => handleDeletePO(po.id)}
+                                                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                                        title="Delete PO"
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}

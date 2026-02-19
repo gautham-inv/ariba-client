@@ -71,8 +71,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         credentials: 'include'
       });
       if (res.ok) {
-        const data = await res.json();
-        setNotifications(data);
+        const result = await res.json();
+        // Handle wrapped response from TransformInterceptor
+        setNotifications(result.data || result);
       }
     } catch (err) {
       console.error("Failed to fetch notifications", err);
@@ -157,7 +158,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 )}
                 {(role === 'owner' || role === 'admin' || role === 'org_owner') && (
                   <>
-                    <Link href="/dashboard/team" className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg group hover:text-indigo-700 transition-colors border-t mt-4 pt-4">
+                    <Link href="/dashboard/team" className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg group hover:text-indigo-700 transition-colors">
                       <Users className="h-4 w-4 text-gray-500 group-hover:text-indigo-600" />
                       Team
                     </Link>

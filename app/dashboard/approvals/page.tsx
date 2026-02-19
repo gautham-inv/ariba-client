@@ -48,8 +48,8 @@ export default function ApprovalsPage() {
                 credentials: "include"
             });
             if (res.ok) {
-                const data = await res.json();
-                setRequests(data);
+                const result = await res.json();
+                setRequests(result.data || result);
             }
         } catch (err) {
             console.error("Failed to fetch approvals", err);

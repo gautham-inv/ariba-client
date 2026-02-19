@@ -10,7 +10,8 @@ import {
   Clock,
   Loader2,
   Search,
-  Filter
+  Filter,
+  Trash2
 } from "lucide-react";
 import Link from "next/link";
 import { API_BASE } from "@/lib/api";
@@ -47,13 +48,34 @@ export default function RFQListPage() {
         credentials: 'include'
       });
       if (res.ok) {
-        const data = await res.json();
-        setRfqs(data);
+        const result = await res.json();
+        setRfqs(result.data || result);
       }
     } catch (err) {
       console.error("Failed to fetch RFQs", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteRFQ = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this RFQ? It will also delete all associated quotes and purchase orders.")) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/rfq/${id}`, {
+        method: 'DELETE',
+        credentials: "include",
+      });
+
+      if (res.ok) {
+        fetchRFQs();
+      } else {
+        const error = await res.json();
+        alert(error.message || "Failed to delete RFQ");
+      }
+    } catch (err) {
+      console.error("Failed to delete RFQ", err);
+      alert("Network error");
     }
   };
 
@@ -144,13 +166,22 @@ export default function RFQListPage() {
                       </div>
                     </td>
                     <td className="px-8 py-5 text-right">
-                      <Link
-                        href={`/dashboard/rfq/detail?id=${rfq.id}`}
-                        className="inline-flex items-center gap-1.5 bg-white border border-gray-200 group-hover:border-indigo-200 px-3 py-1.5 rounded-lg text-xs font-bold text-gray-700 group-hover:text-indigo-700 transition-all shadow-sm"
-                      >
-                        View Details
-                        <ChevronRight className="h-3 w-3" />
-                      </Link>
+                      <div className="flex items-center justify-end gap-2">
+                        <Link
+                          href={`/dashboard/rfq/detail?id=${rfq.id}`}
+                          className="inline-flex items-center gap-1.5 bg-white border border-gray-200 group-hover:border-indigo-200 px-3 py-1.5 rounded-lg text-xs font-bold text-gray-700 group-hover:text-indigo-700 transition-all shadow-sm"
+                        >
+                          View Details
+                          <ChevronRight className="h-3 w-3" />
+                        </Link>
+                        <button
+                          onClick={() => handleDeleteRFQ(rfq.id)}
+                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                          title="Delete RFQ"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

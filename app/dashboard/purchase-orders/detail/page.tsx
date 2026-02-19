@@ -76,8 +76,8 @@ function PODetailContent() {
                     credentials: "include"
                 });
                 if (!res.ok) throw new Error("Failed to fetch Purchase Order details");
-                const data = await res.json();
-                setPo(data);
+                const result = await res.json();
+                setPo(result.data || result);
             } catch (err: any) {
                 setError(err.message);
             } finally {
@@ -116,8 +116,9 @@ function PODetailContent() {
                 credentials: "include",
             });
             if (res.ok) {
-                const updated = await res.json();
-                setPo({ ...po, status: updated.status });
+                const result = await res.json();
+                const actualUpdated = result.data || result;
+                setPo({ ...po, status: actualUpdated.status });
                 alert("Purchase Order sent to supplier!");
             } else {
                 const errData = await res.json();

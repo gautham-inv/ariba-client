@@ -35,8 +35,8 @@ function AcceptInvitationContent() {
                     return;
                 }
 
-                const data = await res.json();
-                setInvitation(data);
+                const result = await res.json();
+                setInvitation(result.data || result);
                 setStatus("confirming");
             } catch (err) {
                 setStatus("error");

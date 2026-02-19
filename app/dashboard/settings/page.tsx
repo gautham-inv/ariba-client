@@ -46,8 +46,8 @@ export default function SettingsPage() {
                 credentials: 'include'
             });
             if (res.ok) {
-                const data = await res.json();
-                setRules(data);
+                const result = await res.json();
+                setRules(result.data || result);
             }
         } catch (err) {
             console.error("Failed to fetch rules", err);
@@ -66,7 +66,6 @@ export default function SettingsPage() {
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
                 body: JSON.stringify({
-                    buyerOrgId: activeOrg.id,
                     minAmount: parseFloat(minAmount),
                     role: role
                 })
