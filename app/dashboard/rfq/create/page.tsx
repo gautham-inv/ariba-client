@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   ChevronLeft,
   Plus,
@@ -12,11 +13,12 @@ import {
   BadgeDollarSign,
   FileText,
   Loader2,
-  Check
+  Check,
 } from "lucide-react";
 import Link from "next/link";
 import { useActiveOrganization, useSession } from "@/lib/auth-client";
-import { API_BASE } from "@/lib/api";
+import { api } from "@/lib/api-client";
+import { LoadingSpinner } from "@/components/ui";
 
 interface Supplier {
   id: string;
@@ -33,13 +35,25 @@ interface Item {
 
 const RFQ_DRAFT_KEY = "ariba-rfq-create-draft";
 
-function loadDraft(): Partial<{ title: string; dueDate: string; currency: string; notes: string; items: Item[]; selectedSuppliers: string[] }> | null {
+function loadDraft(): Partial<{
+  title: string;
+  dueDate: string;
+  currency: string;
+  notes: string;
+  items: Item[];
+  selectedSuppliers: string[];
+}> | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = sessionStorage.getItem(RFQ_DRAFT_KEY);
     if (!raw) return null;
     const data = JSON.parse(raw);
-    if (data && Array.isArray(data.items) && data.items.length > 0 && Array.isArray(data.selectedSuppliers)) {
+    if (
+      data &&
+      Array.isArray(data.items) &&
+      data.items.length > 0 &&
+      Array.isArray(data.selectedSuppliers)
+    ) {
       return {
         title: typeof data.title === "string" ? data.title : "",
         dueDate: typeof data.dueDate === "string" ? data.dueDate : "",
@@ -48,20 +62,36 @@ function loadDraft(): Partial<{ title: string; dueDate: string; currency: string
         items: data.items.map((i: any) => ({
           name: typeof i.name === "string" ? i.name : "",
           description: typeof i.description === "string" ? i.description : "",
-          quantity: typeof i.quantity === "number" && !isNaN(i.quantity) ? i.quantity : 1,
+          quantity:
+            typeof i.quantity === "number" && !isNaN(i.quantity)
+              ? i.quantity
+              : 1,
           unit: typeof i.unit === "string" ? i.unit : "PCS",
         })),
-        selectedSuppliers: data.selectedSuppliers.filter((s: unknown) => typeof s === "string"),
+        selectedSuppliers: data.selectedSuppliers.filter(
+          (s: unknown) => typeof s === "string"
+        ),
       };
     }
-  } catch (_) { /* ignore */ }
+  } catch (_) {
+    /* ignore */
+  }
   return null;
 }
 
-function saveDraft(data: { title: string; dueDate: string; currency: string; notes: string; items: Item[]; selectedSuppliers: string[] }) {
+function saveDraft(data: {
+  title: string;
+  dueDate: string;
+  currency: string;
+  notes: string;
+  items: Item[];
+  selectedSuppliers: string[];
+}) {
   try {
     sessionStorage.setItem(RFQ_DRAFT_KEY, JSON.stringify(data));
-  } catch (_) { /* ignore */ }
+  } catch (_) {
+    /* ignore */
+  }
 }
 
 export default function CreateRFQPage() {
@@ -74,40 +104,49 @@ export default function CreateRFQPage() {
   const [dueDate, setDueDate] = useState(initialDraft?.dueDate ?? "");
   const [currency, setCurrency] = useState(initialDraft?.currency ?? "USD");
   const [notes, setNotes] = useState(initialDraft?.notes ?? "");
-  const [items, setItems] = useState<Item[]>(initialDraft?.items?.length ? initialDraft.items : [{ name: "", description: "", quantity: 1, unit: "PCS" }]);
-  const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>(initialDraft?.selectedSuppliers ?? []);
+  const [items, setItems] = useState<Item[]>(
+    initialDraft?.items?.length
+      ? initialDraft.items
+      : [{ name: "", description: "", quantity: 1, unit: "PCS" }]
+  );
+  const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>(
+    initialDraft?.selectedSuppliers ?? []
+  );
 
-  const [allSuppliers, setAllSuppliers] = useState<Supplier[]>([]);
-  const [loadingSuppliers, setLoadingSuppliers] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (activeOrg) {
-      fetchSuppliers();
-    }
-  }, [activeOrg]);
-
-  useEffect(() => {
+  // Auto-save draft on every render where values change
+  useMemo(() => {
     saveDraft({ title, dueDate, currency, notes, items, selectedSuppliers });
   }, [title, dueDate, currency, notes, items, selectedSuppliers]);
 
-  const fetchSuppliers = async () => {
-    if (!activeOrg) return;
-    setLoadingSuppliers(true);
-    try {
-      const res = await fetch(`${API_BASE}/suppliers/org/${activeOrg.id}`, {
-        credentials: "include"
-      });
-      if (res.ok) {
-        const result = await res.json();
-        setAllSuppliers(result.data || result);
+  // Fetch suppliers via TanStack Query
+  const { data: allSuppliers = [], isLoading: loadingSuppliers } = useQuery({
+    queryKey: ["suppliers", activeOrg?.id],
+    queryFn: () => api.get<Supplier[]>(`/suppliers/org/${activeOrg?.id}`),
+    enabled: !!activeOrg?.id,
+  });
+
+  // Submit mutation
+  const submitMutation = useMutation({
+    mutationFn: (payload: {
+      title: string;
+      dueDate: string;
+      currency: string;
+      notes: string;
+      items: Item[];
+      supplierIds: string[];
+    }) => api.post<{ id: string }>("/rfq", payload),
+    onSuccess: (data) => {
+      try {
+        sessionStorage.removeItem(RFQ_DRAFT_KEY);
+      } catch (_) {
+        /* ignore */
       }
-    } catch (err) {
-      console.error("Failed to fetch suppliers", err);
-    } finally {
-      setLoadingSuppliers(false);
-    }
-  };
+      router.push(`/dashboard/rfq/detail?id=${data.id}`);
+    },
+    onError: (err: any) => {
+      alert(`Error: ${err.message || "Failed to create RFQ"}`);
+    },
+  });
 
   const handleAddItem = () => {
     setItems([...items, { name: "", description: "", quantity: 1, unit: "PCS" }]);
@@ -125,51 +164,35 @@ export default function CreateRFQPage() {
   };
 
   const toggleSupplier = (id: string) => {
-    setSelectedSuppliers(prev =>
-      prev.includes(id) ? prev.filter(sid => sid !== id) : [...prev, id]
+    setSelectedSuppliers((prev) =>
+      prev.includes(id) ? prev.filter((sid) => sid !== id) : [...prev, id]
     );
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!activeOrg || submitting) return;
+  const handleSubmit = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!activeOrg || submitMutation.isPending) return;
 
-    // Validation
-    if (!title || !dueDate || items.some(i => !i.name) || selectedSuppliers.length === 0) {
-      alert("Please fill in all required fields and select at least one supplier.");
+    if (
+      !title ||
+      !dueDate ||
+      items.some((i) => !i.name) ||
+      selectedSuppliers.length === 0
+    ) {
+      alert(
+        "Please fill in all required fields and select at least one supplier."
+      );
       return;
     }
 
-    setSubmitting(true);
-    try {
-      const res = await fetch(`${API_BASE}/rfq`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          title,
-          dueDate,
-          currency,
-          notes,
-          items,
-          supplierIds: selectedSuppliers,
-        }),
-      });
-
-      if (res.ok) {
-        const result = await res.json();
-        const actualRfq = result.data || result;
-        try { sessionStorage.removeItem(RFQ_DRAFT_KEY); } catch (_) { /* ignore */ }
-        router.push(`/dashboard/rfq/detail?id=${actualRfq.id}`);
-      } else {
-        const error = await res.json();
-        alert(`Error: ${error.message || "Failed to create RFQ"}`);
-      }
-    } catch (err) {
-      alert("Critical Error creating RFQ");
-    } finally {
-      setSubmitting(false);
-    }
+    submitMutation.mutate({
+      title,
+      dueDate,
+      currency,
+      notes,
+      items,
+      supplierIds: selectedSuppliers,
+    });
   };
 
   return (
@@ -178,31 +201,41 @@ export default function CreateRFQPage() {
       <div className="bg-white border-b sticky top-0 z-30 shadow-sm">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/dashboard" className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-500">
+            <Link
+              href="/dashboard"
+              className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-500"
+            >
               <ChevronLeft className="h-5 w-5" />
             </Link>
             <div>
-              <h1 className="text-2xl font-black text-gray-900 tracking-tight">Create New Request for Quote</h1>
-              <p className="text-xs text-gray-500 mt-0.5">Draft is saved as you type. Use &quot;Send to Suppliers&quot; on the RFQ page when ready (SAP Ariba–style).</p>
+              <h1 className="text-2xl font-black text-gray-900 tracking-tight">
+                Create New Request for Quote
+              </h1>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Draft is saved as you type. Use &quot;Send to Suppliers&quot; on
+                the RFQ page when ready (SAP Ariba–style).
+              </p>
             </div>
           </div>
           <button
             onClick={handleSubmit}
-            disabled={submitting}
+            disabled={submitMutation.isPending}
             title="Save as draft (like SAP Ariba). Send to suppliers from the RFQ detail page when ready."
             className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-indigo-100 flex items-center gap-2"
           >
-            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            {submitMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
             Save draft
           </button>
         </div>
       </div>
 
       <div className="max-w-5xl mx-auto p-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
-
         {/* Main Form Fields */}
         <div className="lg:col-span-2 space-y-8">
-
           {/* Header Info */}
           <div className="bg-white rounded-2xl shadow-sm border p-8 space-y-6">
             <div className="flex items-center gap-2 mb-2 text-indigo-600">
@@ -212,57 +245,73 @@ export default function CreateRFQPage() {
 
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-gray-800 uppercase tracking-widest pl-1 mb-2">Project Title *</label>
+                <label className="block text-xs font-bold text-gray-800 uppercase tracking-widest pl-1 mb-2">
+                  Project Title *
+                </label>
                 <input
                   type="text"
                   placeholder="e.g. Office Furniture Upgrade Q1 2024"
                   className="w-full bg-gray-50 border rounded-xl px-4 py-3 text-sm text-gray-900 focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
                   value={title}
-                  onChange={e => setTitle(e.target.value)}
+                  onChange={(e) => setTitle(e.target.value)}
                   required
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-gray-800 uppercase tracking-widest pl-1 mb-2">Submission Due Date *</label>
+                  <label className="block text-xs font-bold text-gray-800 uppercase tracking-widest pl-1 mb-2">
+                    Submission Due Date *
+                  </label>
                   <div className="relative">
                     <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <input
                       type="date"
                       className="w-full bg-gray-50 border rounded-xl pl-12 pr-4 py-3 text-sm text-gray-900 focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
                       value={dueDate}
-                      onChange={e => setDueDate(e.target.value)}
+                      onChange={(e) => setDueDate(e.target.value)}
                       required
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-800 uppercase tracking-widest pl-1 mb-2">Currency *</label>
+                  <label className="block text-xs font-bold text-gray-800 uppercase tracking-widest pl-1 mb-2">
+                    Currency *
+                  </label>
                   <div className="relative">
                     <BadgeDollarSign className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <select
                       className="w-full bg-gray-50 border rounded-xl pl-12 pr-4 py-3 text-sm text-gray-900 focus:ring-2 focus:ring-indigo-500 transition-all outline-none appearance-none"
                       value={currency}
-                      onChange={e => setCurrency(e.target.value)}
+                      onChange={(e) => setCurrency(e.target.value)}
                     >
-                      <option value="USD" className="text-gray-900">USD - US Dollar</option>
-                      <option value="EUR" className="text-gray-900">EUR - Euro</option>
-                      <option value="GBP" className="text-gray-900">GBP - British Pound</option>
-                      <option value="INR" className="text-gray-900">INR - Indian Rupee</option>
+                      <option value="USD" className="text-gray-900">
+                        USD - US Dollar
+                      </option>
+                      <option value="EUR" className="text-gray-900">
+                        EUR - Euro
+                      </option>
+                      <option value="GBP" className="text-gray-900">
+                        GBP - British Pound
+                      </option>
+                      <option value="INR" className="text-gray-900">
+                        INR - Indian Rupee
+                      </option>
                     </select>
                   </div>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-800 uppercase tracking-widest pl-1 mb-2">Notes & Instructions</label>
+                <label className="block text-xs font-bold text-gray-800 uppercase tracking-widest pl-1 mb-2">
+                  Notes &amp; Instructions
+                </label>
                 <textarea
                   rows={3}
                   placeholder="Additional details for the suppliers..."
                   className="w-full bg-gray-50 border rounded-xl px-4 py-3 text-sm text-gray-900 focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
                   value={notes}
-                  onChange={e => setNotes(e.target.value)}
+                  onChange={(e) => setNotes(e.target.value)}
                 />
               </div>
             </div>
@@ -273,7 +322,9 @@ export default function CreateRFQPage() {
             <div className="px-8 py-5 border-b flex items-center justify-between">
               <div className="flex items-center gap-2 text-indigo-600">
                 <FileText className="h-5 w-5" />
-                <h2 className="font-bold text-gray-900">Items / Services Requested</h2>
+                <h2 className="font-bold text-gray-900">
+                  Items / Services Requested
+                </h2>
               </div>
               <button
                 type="button"
@@ -287,7 +338,10 @@ export default function CreateRFQPage() {
 
             <div className="p-8 space-y-6">
               {items.map((item, index) => (
-                <div key={index} className="relative group bg-gray-50/50 p-6 rounded-2xl border border-dashed hover:border-indigo-200 transition-all">
+                <div
+                  key={index}
+                  className="relative group bg-gray-50/50 p-6 rounded-2xl border border-dashed hover:border-indigo-200 transition-all"
+                >
                   <button
                     type="button"
                     onClick={() => handleRemoveItem(index)}
@@ -302,7 +356,9 @@ export default function CreateRFQPage() {
                         placeholder="Item Name"
                         className="w-full border rounded-lg px-4 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-indigo-500 outline-none"
                         value={item.name}
-                        onChange={e => handleItemChange(index, "name", e.target.value)}
+                        onChange={(e) =>
+                          handleItemChange(index, "name", e.target.value)
+                        }
                       />
                     </div>
                     <div>
@@ -311,7 +367,13 @@ export default function CreateRFQPage() {
                         placeholder="Qty"
                         className="w-full border rounded-lg px-4 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-indigo-500 outline-none"
                         value={isNaN(item.quantity) ? "" : item.quantity}
-                        onChange={e => handleItemChange(index, "quantity", parseFloat(e.target.value))}
+                        onChange={(e) =>
+                          handleItemChange(
+                            index,
+                            "quantity",
+                            parseFloat(e.target.value)
+                          )
+                        }
                       />
                     </div>
                     <div>
@@ -319,7 +381,9 @@ export default function CreateRFQPage() {
                         placeholder="Unit"
                         className="w-full border rounded-lg px-4 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-indigo-500 outline-none"
                         value={item.unit}
-                        onChange={e => handleItemChange(index, "unit", e.target.value)}
+                        onChange={(e) =>
+                          handleItemChange(index, "unit", e.target.value)
+                        }
                       />
                     </div>
                     <div className="md:col-span-4 mt-2">
@@ -328,7 +392,9 @@ export default function CreateRFQPage() {
                         rows={1}
                         className="w-full border rounded-lg px-4 py-2 text-xs text-gray-900 focus:ring-2 focus:ring-indigo-500 outline-none"
                         value={item.description}
-                        onChange={e => handleItemChange(index, "description", e.target.value)}
+                        onChange={(e) =>
+                          handleItemChange(index, "description", e.target.value)
+                        }
                       />
                     </div>
                   </div>
@@ -350,30 +416,40 @@ export default function CreateRFQPage() {
 
             <div className="p-4 max-h-[500px] overflow-y-auto">
               {loadingSuppliers ? (
-                <div className="py-12 text-center text-gray-400">
-                  <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
-                  <p className="text-xs">Loading vendor list...</p>
-                </div>
+                <LoadingSpinner label="Loading vendor list..." />
               ) : allSuppliers.length === 0 ? (
                 <div className="py-12 text-center">
-                  <p className="text-xs text-gray-500 italic">No suppliers found.</p>
-                  <Link href="/dashboard/suppliers" className="text-xs font-bold text-indigo-600 mt-2 block">Add your first supplier</Link>
-                  <p className="text-[10px] text-gray-400 mt-2">Your draft is saved; it will be here when you return.</p>
+                  <p className="text-xs text-gray-500 italic">
+                    No suppliers found.
+                  </p>
+                  <Link
+                    href="/dashboard/suppliers"
+                    className="text-xs font-bold text-indigo-600 mt-2 block"
+                  >
+                    Add your first supplier
+                  </Link>
+                  <p className="text-[10px] text-gray-400 mt-2">
+                    Your draft is saved; it will be here when you return.
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {allSuppliers.map(s => (
+                  {allSuppliers.map((s) => (
                     <div
                       key={s.id}
                       onClick={() => toggleSupplier(s.id)}
                       className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all border ${selectedSuppliers.includes(s.id)
-                        ? 'border-indigo-600 bg-indigo-50/50 ring-1 ring-indigo-600'
-                        : 'border-transparent hover:bg-gray-50'
+                          ? "border-indigo-600 bg-indigo-50/50 ring-1 ring-indigo-600"
+                          : "border-transparent hover:bg-gray-50"
                         }`}
                     >
                       <div className="min-w-0">
-                        <p className="text-sm font-bold text-gray-900 truncate">{s.name}</p>
-                        <p className="text-[10px] text-gray-500 truncate">{s.email}</p>
+                        <p className="text-sm font-bold text-gray-900 truncate">
+                          {s.name}
+                        </p>
+                        <p className="text-[10px] text-gray-500 truncate">
+                          {s.email}
+                        </p>
                       </div>
                       {selectedSuppliers.includes(s.id) && (
                         <div className="bg-indigo-600 rounded-full p-1 shadow-sm">
@@ -388,13 +464,15 @@ export default function CreateRFQPage() {
 
             <div className="p-4 border-t bg-gray-50/50">
               <div className="flex justify-between items-center text-xs">
-                <span className="text-gray-700 font-medium">Selected Suppliers:</span>
-                <span className="font-bold text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded-full">{selectedSuppliers.length}</span>
+                <span className="text-gray-700 font-medium">
+                  Selected Suppliers:
+                </span>
+                <span className="font-bold text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded-full">
+                  {selectedSuppliers.length}
+                </span>
               </div>
             </div>
           </div>
-
-
         </div>
       </div>
     </div>

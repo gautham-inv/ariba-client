@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Building2,
   Calendar,
@@ -18,7 +19,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useSession } from "@/lib/auth-client";
-import { API_BASE } from "@/lib/api";
+import { api } from "@/lib/api-client";
+import { LoadingSpinner, StatusBadge } from "@/components/ui";
 
 interface RFQItem {
   id: string;
@@ -67,158 +69,72 @@ function RFQDetailContent() {
   const id = searchParams.get("id");
   const router = useRouter();
   const { data: session } = useSession();
-  const [rfq, setRfq] = useState<RFQDetails | null>(null);
-  const [loading, setLoading] = useState(!!id);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const [showQuoteModal, setShowQuoteModal] = useState(false);
   const [selectedSupplierId, setSelectedSupplierId] = useState("");
   const [quoteAmount, setQuoteAmount] = useState("");
   const [quoteNotes, setQuoteNotes] = useState("");
-  const [submittingQuote, setSubmittingQuote] = useState(false);
-  const [sendingRfq, setSendingRfq] = useState(false);
 
-  const fetchRFQ = async () => {
-    if (!id) return;
-    try {
-      setLoading(true);
-      const res = await fetch(`${API_BASE}/rfq/${id}`, {
-        credentials: "include"
-      });
-      if (!res.ok) throw new Error("Failed to fetch RFQ details");
-      const result = await res.json();
-      setRfq(result.data || result);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Fetch RFQ details
+  const { data: rfq, isLoading: loading, error } = useQuery({
+    queryKey: ["rfq", id],
+    queryFn: () => api.get<RFQDetails>(`/rfq/${id}`),
+    enabled: !!id,
+  });
 
-  useEffect(() => {
-    if (id) fetchRFQ();
-    else setLoading(false);
-  }, [id]);
+  // Send RFQ mutation
+  const sendMutation = useMutation({
+    mutationFn: () => api.post(`/rfq/${id}/send`),
+    onSuccess: () => {
+      alert("RFQ sent to suppliers successfully!");
+      queryClient.invalidateQueries({ queryKey: ["rfq", id] });
+    },
+    onError: () => alert("Failed to send RFQ"),
+  });
 
-  const handleSendRFQ = async () => {
-    if (!id || sendingRfq) return;
-    setSendingRfq(true);
-    try {
-      const res = await fetch(`${API_BASE}/rfq/${id}/send`, {
-        method: "POST",
-        credentials: "include",
-      });
-      if (res.ok) {
-        alert("RFQ sent to suppliers successfully!");
-        await fetchRFQ();
-      } else {
-        alert("Failed to send RFQ");
-      }
-    } catch (err) {
-      alert("Error sending RFQ");
-    } finally {
-      setSendingRfq(false);
-    }
-  };
+  // Add quote mutation
+  const addQuoteMutation = useMutation({
+    mutationFn: (payload: { supplierId: string; totalAmount: number; notes: string }) =>
+      api.post(`/rfq/${id}/quote`, payload),
+    onSuccess: () => {
+      setShowQuoteModal(false);
+      setQuoteAmount("");
+      setQuoteNotes("");
+      setSelectedSupplierId("");
+      queryClient.invalidateQueries({ queryKey: ["rfq", id] });
+    },
+    onError: () => alert("Failed to add quote"),
+  });
 
-  const handleAddQuote = async () => {
-    if (!id || !selectedSupplierId || !quoteAmount) return;
-    setSubmittingQuote(true);
-    try {
-      const res = await fetch(`${API_BASE}/rfq/${id}/quote`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          supplierId: selectedSupplierId,
-          totalAmount: parseFloat(quoteAmount),
-          notes: quoteNotes,
-        }),
-        credentials: "include",
-      });
+  // Confirm quote mutation
+  const confirmMutation = useMutation({
+    mutationFn: (quoteId: string) =>
+      api.post(`/rfq/quote/${quoteId}/status`, { status: "CONFIRMED" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["rfq", id] }),
+    onError: () => alert("Failed to update status"),
+  });
 
-      if (res.ok) {
-        setShowQuoteModal(false);
-        setQuoteAmount("");
-        setQuoteNotes("");
-        fetchRFQ();
-      } else {
-        alert("Failed to add quote");
-      }
-    } catch (err) {
-      alert("Error adding quote");
-    } finally {
-      setSubmittingQuote(false);
-    }
-  };
+  // Create PO mutation
+  const createPOMutation = useMutation({
+    mutationFn: (quoteId: string) =>
+      api.post<{ id: string }>("/purchase-orders", { quoteId, notes: `Created from Quote ${quoteId}` }),
+    onSuccess: (data) => {
+      alert("Purchase Order Created!");
+      router.push(`/dashboard/purchase-orders/detail?id=${data.id}`);
+    },
+    onError: (err: any) => alert(err.message || "Failed to create PO"),
+  });
 
-  const handleConfirmQuote = async (quoteId: string) => {
-    if (!confirm("Are you sure you want to mark this quote as CONFIRMED? This allows you to create a Purchase Order.")) return;
-    try {
-      const res = await fetch(`${API_BASE}/rfq/quote/${quoteId}/status`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'CONFIRMED' }),
-        credentials: "include",
-      });
-      if (res.ok) {
-        fetchRFQ();
-      } else {
-        alert("Failed to update status");
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Error updating status");
-    }
-  };
-
-  const handleCreatePO = async (quoteId: string) => {
-    if (!rfq) return;
-    if (!confirm("Create Purchase Order from this quote?")) return;
-
-    try {
-      const res = await fetch(`${API_BASE}/purchase-orders`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          quoteId: quoteId,
-          notes: `Created from Quote ${quoteId}`
-        })
-      });
-
-      if (res.ok) {
-        const result = await res.json();
-        const po = result.data || result;
-        alert("Purchase Order Created!");
-        router.push(`/dashboard/purchase-orders/detail?id=${po.id}`);
-      } else {
-        const err = await res.json();
-        alert(err.message || "Failed to create PO");
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Error creating PO");
-    }
-  };
-
-  const handleDeleteRFQ = async () => {
-    if (!id) return;
-    if (!confirm("Are you sure you want to delete this RFQ? All associated quotes and data will be permanently removed.")) return;
-    try {
-      const res = await fetch(`${API_BASE}/rfq/${id}`, {
-        method: 'DELETE',
-        credentials: "include",
-      });
-      if (res.ok) {
-        router.push('/dashboard');
-      } else {
-        alert("Failed to delete RFQ");
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Error deleting RFQ");
-    }
-  };
+  // Delete RFQ mutation
+  const deleteMutation = useMutation({
+    mutationFn: () => api.delete(`/rfq/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["rfqs"] });
+      router.push("/dashboard");
+    },
+    onError: () => alert("Failed to delete RFQ"),
+  });
 
   if (!id) {
     return (
@@ -235,11 +151,7 @@ function RFQDetailContent() {
   }
 
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <Loader2 className="h-12 w-12 animate-spin text-indigo-600" />
-      </div>
-    );
+    return <LoadingSpinner fullScreen size="h-12 w-12" />;
   }
 
   if (error || !rfq) {
@@ -247,7 +159,7 @@ function RFQDetailContent() {
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-red-600">Error</h1>
-          <p className="mt-2 text-gray-600">{error || "RFQ not found"}</p>
+          <p className="mt-2 text-gray-600">{(error as any)?.message || "RFQ not found"}</p>
           <Link href="/dashboard" className="mt-4 inline-block text-indigo-600 hover:underline">
             Back to Dashboard
           </Link>
@@ -273,13 +185,7 @@ function RFQDetailContent() {
                 </nav>
                 <h1 className="text-xl font-bold text-gray-900 flex items-center gap-3">
                   {rfq.title}
-                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${rfq.status === 'DRAFT' ? 'bg-amber-100 text-amber-700' :
-                    rfq.status === 'SENT' ? 'bg-blue-100 text-blue-700' :
-                      rfq.status === 'CLOSED' ? 'bg-green-100 text-green-700' :
-                        'bg-gray-100 text-gray-700'
-                    }`}>
-                    {rfq.status}
-                  </span>
+                  <StatusBadge status={rfq.status} />
                 </h1>
               </div>
             </div>
@@ -287,19 +193,20 @@ function RFQDetailContent() {
               {rfq.status === 'DRAFT' && (
                 <button
                   type="button"
-                  onClick={handleSendRFQ}
-                  disabled={sendingRfq}
+                  onClick={() => sendMutation.mutate()}
+                  disabled={sendMutation.isPending}
                   className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-medium transition-colors shadow-sm"
                 >
-                  {sendingRfq ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  {sendingRfq ? "Sending…" : "Send to Suppliers"}
+                  {sendMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  {sendMutation.isPending ? "Sending…" : "Send to Suppliers"}
                 </button>
               )}
               <button
-                onClick={handleDeleteRFQ}
-                className="inline-flex items-center gap-2 border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg font-medium transition-colors"
+                onClick={() => { if (confirm("Are you sure you want to delete this RFQ? All associated quotes and data will be permanently removed.")) deleteMutation.mutate(); }}
+                disabled={deleteMutation.isPending}
+                className="inline-flex items-center gap-2 border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
               >
-                <Trash2 className="h-4 w-4" />
+                {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                 Delete RFQ
               </button>
             </div>
@@ -431,18 +338,20 @@ function RFQDetailContent() {
                             <div className="flex justify-end gap-2">
                               {quote.status === 'RECEIVED' && (
                                 <button
-                                  onClick={() => handleConfirmQuote(quote.id)}
-                                  className="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-3 py-1 rounded text-xs font-bold transition-colors"
+                                  onClick={() => { if (confirm("Are you sure you want to mark this quote as CONFIRMED?")) confirmMutation.mutate(quote.id); }}
+                                  disabled={confirmMutation.isPending}
+                                  className="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-3 py-1 rounded text-xs font-bold transition-colors disabled:opacity-50"
                                 >
-                                  Confirm
+                                  {confirmMutation.isPending && confirmMutation.variables === quote.id ? '...' : 'Confirm'}
                                 </button>
                               )}
                               {quote.status === 'CONFIRMED' && (
                                 <button
-                                  onClick={() => handleCreatePO(quote.id)}
-                                  className="bg-green-600 text-white hover:bg-green-700 px-3 py-1 rounded text-xs font-bold transition-colors shadow-sm"
+                                  onClick={() => { if (confirm("Create Purchase Order from this quote?")) createPOMutation.mutate(quote.id); }}
+                                  disabled={createPOMutation.isPending}
+                                  className="bg-green-600 text-white hover:bg-green-700 px-3 py-1 rounded text-xs font-bold transition-colors shadow-sm disabled:opacity-50"
                                 >
-                                  Create PO
+                                  {createPOMutation.isPending && createPOMutation.variables === quote.id ? '...' : 'Create PO'}
                                 </button>
                               )}
                               {quote.status === 'ACCEPTED' && (
@@ -593,11 +502,11 @@ function RFQDetailContent() {
 
               <div className="pt-2">
                 <button
-                  onClick={handleAddQuote}
-                  disabled={submittingQuote || !selectedSupplierId || !quoteAmount}
+                  onClick={() => addQuoteMutation.mutate({ supplierId: selectedSupplierId, totalAmount: parseFloat(quoteAmount), notes: quoteNotes })}
+                  disabled={addQuoteMutation.isPending || !selectedSupplierId || !quoteAmount}
                   className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl shadow-lg shadow-indigo-200 transition-all disabled:opacity-50 disabled:shadow-none flex items-center justify-center gap-2"
                 >
-                  {submittingQuote ? (
+                  {addQuoteMutation.isPending ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <CheckCircle2 className="h-4 w-4" />
@@ -615,11 +524,7 @@ function RFQDetailContent() {
 
 export default function RFQDetailPage() {
   return (
-    <Suspense fallback={
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <Loader2 className="h-12 w-12 animate-spin text-indigo-600" />
-      </div>
-    }>
+    <Suspense fallback={<LoadingSpinner fullScreen size="h-12 w-12" />}>
       <RFQDetailContent />
     </Suspense>
   );

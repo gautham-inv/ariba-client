@@ -1,102 +1,72 @@
 "use client";
 
-import { useActiveOrganization, useSession, useActiveMember } from "@/lib/auth-client";
-import { useState, useEffect } from "react";
+import { useActiveOrganization, useActiveMember } from "@/lib/auth-client";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import {
     ShieldCheck,
     Plus,
     Loader2,
     DollarSign,
     UserCircle,
-    Trash2,
-    AlertCircle
+    AlertCircle,
 } from "lucide-react";
-import { API_BASE } from "@/lib/api";
+import { api } from "@/lib/api-client";
+import { PageHeader, LoadingSpinner, ConfirmDeleteButton } from "@/components/ui";
 
 interface ApprovalRule {
     id: string;
     minAmount: number;
+    currency: string;
     role: string;
     createdAt: string;
 }
 
+const CURRENCIES = ["USD", "EUR", "GBP", "INR", "AED", "JPY", "CNY"] as const;
+
 export default function SettingsPage() {
-    const { data: session } = useSession();
     const { data: activeOrg } = useActiveOrganization();
     const { data: activeMember, isPending: isMemberLoading } = useActiveMember();
-    const [rules, setRules] = useState<ApprovalRule[]>([]);
-    const [loading, setLoading] = useState(false);
+    const queryClient = useQueryClient();
 
-    // New Rule State
     const [minAmount, setMinAmount] = useState("");
+    const [currency, setCurrency] = useState("USD");
     const [role, setRole] = useState("APPROVER");
     const [isCreating, setIsCreating] = useState(false);
 
-    useEffect(() => {
-        if (activeOrg) {
-            fetchRules();
-        }
-    }, [activeOrg]);
+    const { data: rules = [], isLoading } = useQuery({
+        queryKey: ["approval-rules", activeOrg?.id],
+        queryFn: () => api.get<ApprovalRule[]>(`/approvals/rules/${activeOrg?.id}`),
+        enabled: !!activeOrg?.id,
+    });
 
-    const fetchRules = async () => {
-        if (!activeOrg) return;
-        setLoading(true);
-        try {
-            const res = await fetch(`${API_BASE}/approvals/rules/${activeOrg.id}`, {
-                credentials: 'include'
-            });
-            if (res.ok) {
-                const result = await res.json();
-                setRules(result.data || result);
-            }
-        } catch (err) {
-            console.error("Failed to fetch rules", err);
-        } finally {
-            setLoading(false);
-        }
-    };
+    const createMutation = useMutation({
+        mutationFn: (newRule: { minAmount: number; currency: string; role: string }) =>
+            api.post("/approvals/rules", { ...newRule, organizationId: activeOrg?.id }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["approval-rules"] });
+            setMinAmount("");
+            setCurrency("USD");
+            setIsCreating(false);
+        },
+        onError: (err: any) => alert(err.message),
+    });
 
-    const handleCreateRule = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!activeOrg) return;
-
-        try {
-            const res = await fetch(`${API_BASE}/approvals/rules`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({
-                    minAmount: parseFloat(minAmount),
-                    role: role
-                })
-            });
-
-            if (res.ok) {
-                await fetchRules();
-                setMinAmount("");
-                setIsCreating(false);
-            } else {
-                alert("Failed to create rule");
-            }
-        } catch (err) {
-            console.error(err);
-            alert("Error creating rule");
-        }
-    };
+    const deleteMutation = useMutation({
+        mutationFn: (id: string) => api.delete(`/approvals/rules/${id}`),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["approval-rules"] });
+        },
+        onError: (err: any) => alert(err.message),
+    });
 
     const userRole = activeMember?.role?.toLowerCase();
 
     if (isMemberLoading) {
-        return (
-            <div className="flex h-screen items-center justify-center bg-gray-50">
-                <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
-            </div>
-        );
+        return <LoadingSpinner fullScreen />;
     }
 
-    if (userRole !== 'owner' && userRole !== 'org_owner') {
-        console.log("Active Member:", activeMember);
-        console.log("Active Org:", activeOrg);
+    if (userRole !== "owner" && userRole !== "org_owner") {
         return (
             <div className="p-8 flex flex-col items-center justify-center min-h-[50vh]">
                 <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
@@ -109,29 +79,30 @@ export default function SettingsPage() {
     return (
         <div className="p-8 text-gray-900">
             <div className="max-w-7xl mx-auto space-y-8">
+                <PageHeader
+                    title="Rule Management"
+                    subtitle="Define thresholds for Purchase Order approvals."
+                    icon={ShieldCheck}
+                    action={
+                        <button
+                            onClick={() => setIsCreating(!isCreating)}
+                            className={`group flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${isCreating ? "bg-gray-100 text-gray-600" : "bg-indigo-600 text-white hover:bg-indigo-700"}`}
+                        >
+                            <Plus className={`h-4 w-4 transition-transform ${isCreating ? "rotate-45" : ""}`} />
+                            {isCreating ? "Cancel" : "Add Rule"}
+                        </button>
+                    }
+                />
 
-                {/* Header */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div>
-                        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-                            <ShieldCheck className="h-8 w-8 text-indigo-600" />
-                            Rule Management
-                        </h1>
-                        <p className="text-gray-600 mt-1">Define thresholds for Purchase Order approvals.</p>
-                    </div>
-                    <button
-                        onClick={() => setIsCreating(!isCreating)}
-                        className={`group flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${isCreating ? 'bg-gray-100 text-gray-600' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
-                    >
-                        <Plus className={`h-4 w-4 transition-transform ${isCreating ? 'rotate-45' : ''}`} />
-                        {isCreating ? 'Cancel' : 'Add Rule'}
-                    </button>
-                </div>
-
-                {/* Create Rule Form */}
                 {isCreating && (
                     <div className="bg-white rounded-2xl shadow-sm border p-6 animate-in slide-in-from-top-4 duration-200">
-                        <form onSubmit={handleCreateRule} className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+                        <form
+                            onSubmit={(e) => {
+                                e.preventDefault();
+                                createMutation.mutate({ minAmount: parseFloat(minAmount), currency, role });
+                            }}
+                            className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end"
+                        >
                             <div>
                                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2 ml-1">Threshold Amount</label>
                                 <div className="relative">
@@ -141,10 +112,20 @@ export default function SettingsPage() {
                                         required
                                         placeholder="1000"
                                         value={minAmount}
-                                        onChange={e => setMinAmount(e.target.value)}
+                                        onChange={(e) => setMinAmount(e.target.value)}
                                         className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 transition-all font-medium"
                                     />
                                 </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2 ml-1">Currency</label>
+                                <select
+                                    value={currency}
+                                    onChange={(e) => setCurrency(e.target.value)}
+                                    className="w-full px-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 transition-all font-bold appearance-none cursor-pointer"
+                                >
+                                    {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2 ml-1">Required Role</label>
@@ -152,7 +133,7 @@ export default function SettingsPage() {
                                     <UserCircle className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                                     <select
                                         value={role}
-                                        onChange={e => setRole(e.target.value)}
+                                        onChange={(e) => setRole(e.target.value)}
                                         className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 transition-all font-bold appearance-none cursor-pointer"
                                     >
                                         <option value="APPROVER">Approver</option>
@@ -160,22 +141,23 @@ export default function SettingsPage() {
                                     </select>
                                 </div>
                             </div>
-                            <button type="submit" className="bg-indigo-600 text-white font-bold py-2.5 rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all">
-                                Create Rule
+                            <button
+                                type="submit"
+                                disabled={createMutation.isPending}
+                                className="bg-indigo-600 text-white font-bold py-2.5 rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all disabled:opacity-50"
+                            >
+                                {createMutation.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : "Create Rule"}
                             </button>
                         </form>
                     </div>
                 )}
 
-                {/* Rules List */}
                 <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
                     <div className="p-4 border-b bg-gray-50/50">
                         <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider">Active Rules</h3>
                     </div>
-                    {loading ? (
-                        <div className="p-12 flex justify-center">
-                            <Loader2 className="h-6 w-6 animate-spin text-indigo-600" />
-                        </div>
+                    {isLoading ? (
+                        <LoadingSpinner />
                     ) : rules.length === 0 ? (
                         <div className="p-12 text-center">
                             <p className="text-gray-500 italic">No rules defined yet. Large orders will be auto-approved.</p>
@@ -189,24 +171,24 @@ export default function SettingsPage() {
                                             <ShieldCheck className="h-6 w-6" />
                                         </div>
                                         <div>
-                                            <p className="text-gray-900 font-bold">Orders exceeding ${rule.minAmount.toLocaleString()}</p>
+                                            <p className="text-gray-900 font-bold">Orders exceeding {rule.currency} {rule.minAmount.toLocaleString()}</p>
                                             <p className="text-sm text-gray-600 flex items-center gap-1.5 mt-0.5">
                                                 <UserCircle className="h-3.5 w-3.5 text-gray-400" />
                                                 Require approval from: <span className="font-bold text-indigo-600">{rule.role}</span>
                                             </p>
                                         </div>
                                     </div>
-                                    <button className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all">
-                                        <Trash2 className="h-4 w-4" />
-                                    </button>
+                                    <ConfirmDeleteButton
+                                        onDelete={() => deleteMutation.mutate(rule.id)}
+                                        isDeleting={deleteMutation.isPending && deleteMutation.variables === rule.id}
+                                        confirmMessage="Delete this rule?"
+                                        title="Delete Rule"
+                                    />
                                 </div>
                             ))}
                         </div>
                     )}
                 </div>
-
-
-
             </div>
         </div>
     );

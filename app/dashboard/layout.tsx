@@ -3,6 +3,7 @@
 import { useSession, useActiveOrganization, useActiveMember, signOut } from "@/lib/auth-client";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Building2,
   FileText,
@@ -15,7 +16,8 @@ import {
   LayoutDashboard
 } from "lucide-react";
 import Link from "next/link";
-import { API_BASE } from "@/lib/api";
+import { api } from "@/lib/api-client";
+import { LoadingSpinner } from "@/components/ui";
 
 interface Notification {
   id: string;
@@ -30,10 +32,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { data: session, isPending: isSessionPending } = useSession();
   const { data: activeOrg, isPending: isActiveOrgPending } = useActiveOrganization();
   const { data: activeMember, isPending: isActiveMemberPending } = useActiveMember();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -59,41 +61,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // on session creation, so we don't need client-side logic to set it.
   // Just wait for the data to load.
 
-  useEffect(() => {
-    if (session) {
-      fetchNotifications();
-    }
-  }, [session]);
+  // Fetch notifications via TanStack Query
+  const { data: notifications = [] } = useQuery({
+    queryKey: ["notifications"],
+    queryFn: () => api.get<Notification[]>("/organization/notifications"),
+    enabled: !!session,
+  });
 
-  const fetchNotifications = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/organization/notifications`, {
-        credentials: 'include'
-      });
-      if (res.ok) {
-        const result = await res.json();
-        // Handle wrapped response from TransformInterceptor
-        setNotifications(result.data || result);
-      }
-    } catch (err) {
-      console.error("Failed to fetch notifications", err);
-    }
-  };
-
-  const markAllRead = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/organization/notifications/read-all`, {
-        method: 'POST',
-        credentials: 'include'
-      });
-      if (res.ok) {
-        // Optimistically update UI
-        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-      }
-    } catch (err) {
-      console.error("Failed to mark notifications as read", err);
-    }
-  };
+  const markAllReadMutation = useMutation({
+    mutationFn: () => api.post("/organization/notifications/read-all"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    },
+  });
 
   const handleSignOut = async () => {
     await signOut();
@@ -103,11 +83,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const unreadCount = notifications.filter(n => !n.read).length;
 
   if (isSessionPending || isActiveOrgPending) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-gray-50">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
-      </div>
-    );
+    return <LoadingSpinner fullScreen />;
   }
 
   if (!session) return null;
@@ -207,7 +183,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <button
                 onClick={() => {
                   if (!showNotifications) {
-                    markAllRead();
+                    markAllReadMutation.mutate();
                   }
                   setShowNotifications(!showNotifications);
                 }}

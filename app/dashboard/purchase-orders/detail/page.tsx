@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
     ChevronLeft,
     Building2,
@@ -20,7 +21,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useSession } from "@/lib/auth-client";
-import { API_BASE } from "@/lib/api";
+import { api } from "@/lib/api-client";
+import { LoadingSpinner, StatusBadge } from "@/components/ui";
 
 interface POItem {
     id: string;
@@ -37,9 +39,13 @@ interface PODetails {
     rfqId: string;
     quoteId: string;
     totalAmount: number;
+    currency: string;
     status: string;
     notes: string;
     createdAt: string;
+    buyerOrg?: {
+        name: string;
+    };
     supplier: {
         id: string;
         name: string;
@@ -59,78 +65,31 @@ function PODetailContent() {
     const id = searchParams.get("id");
     const router = useRouter();
     const { data: session } = useSession();
-    const [po, setPo] = useState<any | null>(null);
-    const [loading, setLoading] = useState(!!id);
-    const [error, setError] = useState<string | null>(null);
-    const [sending, setSending] = useState(false);
+    const queryClient = useQueryClient();
 
-    useEffect(() => {
-        if (!id) {
-            setLoading(false);
-            return;
-        }
-        const fetchPO = async () => {
-            try {
-                setLoading(true);
-                const res = await fetch(`${API_BASE}/purchase-orders/${id}`, {
-                    credentials: "include"
-                });
-                if (!res.ok) throw new Error("Failed to fetch Purchase Order details");
-                const result = await res.json();
-                setPo(result.data || result);
-            } catch (err: any) {
-                setError(err.message);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchPO();
-    }, [id]);
+    const { data: po, isLoading: loading, error } = useQuery({
+        queryKey: ["purchase-order", id],
+        queryFn: () => api.get<PODetails>(`/purchase-orders/${id}`),
+        enabled: !!id,
+    });
 
-    const handleDeletePO = async () => {
-        if (!id) return;
-        if (!confirm("Are you sure you want to delete this Purchase Order? This action cannot be undone.")) return;
-        try {
-            const res = await fetch(`${API_BASE}/purchase-orders/${id}`, {
-                method: 'DELETE',
-                credentials: "include",
-            });
-            if (res.ok) {
-                router.push('/dashboard/purchase-orders');
-            } else {
-                alert("Failed to delete Purchase Order");
-            }
-        } catch (err) {
-            console.error(err);
-            alert("Error deleting Purchase Order");
-        }
-    };
+    const deleteMutation = useMutation({
+        mutationFn: () => api.delete(`/purchase-orders/${id}`),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["purchase-orders"] });
+            router.push('/dashboard/purchase-orders');
+        },
+        onError: () => alert("Failed to delete Purchase Order"),
+    });
 
-    const handleSendPO = async () => {
-        if (!id) return;
-        if (!confirm("Send this Purchase Order to the supplier?")) return;
-        setSending(true);
-        try {
-            const res = await fetch(`${API_BASE}/purchase-orders/${id}/send`, {
-                method: 'POST',
-                credentials: "include",
-            });
-            if (res.ok) {
-                const result = await res.json();
-                const actualUpdated = result.data || result;
-                setPo({ ...po, status: actualUpdated.status });
-                alert("Purchase Order sent to supplier!");
-            } else {
-                const errData = await res.json();
-                alert(errData.message || "Failed to send Purchase Order");
-            }
-        } catch (err) {
-            console.error(err);
-            alert("Error sending Purchase Order");
-        } finally {
-            setSending(false);
-        }
-    };
+    const sendMutation = useMutation({
+        mutationFn: () => api.post(`/purchase-orders/${id}/send`),
+        onSuccess: () => {
+            alert("Purchase Order sent to supplier!");
+            queryClient.invalidateQueries({ queryKey: ["purchase-order", id] });
+        },
+        onError: (err: any) => alert(err.message || "Failed to send Purchase Order"),
+    });
 
     if (!id) {
         return (
@@ -147,11 +106,7 @@ function PODetailContent() {
     }
 
     if (loading) {
-        return (
-            <div className="flex h-screen items-center justify-center bg-gray-50">
-                <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
-            </div>
-        );
+        return <LoadingSpinner fullScreen />;
     }
 
     if (error || !po) {
@@ -159,7 +114,7 @@ function PODetailContent() {
             <div className="flex h-screen items-center justify-center bg-gray-50">
                 <div className="text-center">
                     <h1 className="text-2xl font-bold text-red-600">Error</h1>
-                    <p className="mt-2 text-gray-600">{error || "Purchase Order not found"}</p>
+                    <p className="mt-2 text-gray-600">{(error as any)?.message || "Purchase Order not found"}</p>
                     <Link href="/dashboard/purchase-orders" className="mt-4 inline-block text-indigo-600 hover:underline">
                         Back to Purchase Orders
                     </Link>
@@ -187,24 +142,18 @@ function PODetailContent() {
                                 </nav>
                                 <h1 className="text-2xl font-black text-gray-900 tracking-tight flex items-center gap-3">
                                     Purchase Order
-                                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${po.status === 'SENT' ? 'bg-blue-100 text-blue-700' :
-                                        po.status === 'APPROVED' ? 'bg-green-100 text-green-700' :
-                                            po.status === 'PENDING_APPROVAL' ? 'bg-amber-100 text-amber-700' :
-                                                'bg-gray-100 text-gray-700'
-                                        }`}>
-                                        {po.status}
-                                    </span>
+                                    <StatusBadge status={po.status} />
                                 </h1>
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
                             {po.status === 'APPROVED' && (
                                 <button
-                                    onClick={handleSendPO}
-                                    disabled={sending}
+                                    onClick={() => { if (confirm("Send this Purchase Order to the supplier?")) sendMutation.mutate(); }}
+                                    disabled={sendMutation.isPending}
                                     className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl text-sm font-bold transition-all shadow-lg shadow-green-100 disabled:opacity-50"
                                 >
-                                    {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                                    {sendMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                                     Send to Supplier
                                 </button>
                             )}
@@ -223,10 +172,11 @@ function PODetailContent() {
                                 Download File
                             </button>
                             <button
-                                onClick={handleDeletePO}
-                                className="flex items-center gap-2 border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-xl text-sm font-bold transition-all"
+                                onClick={() => { if (confirm("Are you sure you want to delete this Purchase Order?")) deleteMutation.mutate(); }}
+                                disabled={deleteMutation.isPending}
+                                className="flex items-center gap-2 border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-xl text-sm font-bold transition-all disabled:opacity-50"
                             >
-                                <Trash2 className="h-4 w-4" />
+                                {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                                 Delete PO
                             </button>
                         </div>
@@ -268,7 +218,7 @@ function PODetailContent() {
                                     <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Order Total</label>
                                     <p className="text-2xl font-black text-gray-900 flex items-center gap-1">
                                         <DollarSign className="h-6 w-6 text-green-600" />
-                                        {po.totalAmount?.toLocaleString()}
+                                        {po.currency || 'USD'} {po.totalAmount?.toLocaleString()}
                                     </p>
                                 </div>
                             </div>
@@ -405,11 +355,7 @@ function PODetailContent() {
 
 export default function PODetailPage() {
     return (
-        <Suspense fallback={
-            <div className="flex h-screen items-center justify-center bg-gray-50">
-                <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
-            </div>
-        }>
+        <Suspense fallback={<LoadingSpinner fullScreen />}>
             <PODetailContent />
         </Suspense>
     );
