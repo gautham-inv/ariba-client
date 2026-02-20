@@ -95,7 +95,7 @@ export default function TeamPage() {
 
   return (
     <div className="p-8">
-      <div className="max-w-4xl mx-auto space-y-8">
+      <div className="max-w-7xl mx-auto space-y-8">
 
         {/* Header */}
         <div>

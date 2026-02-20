@@ -183,7 +183,7 @@ export default function Dashboard() {
 
     return (
         <div className="p-8">
-            <div className="max-w-6xl mx-auto space-y-8">
+            <div className="max-w-7xl mx-auto space-y-8">
 
                 {/* Welcome / Stats Banner */}
                 <div className="bg-white rounded-2xl shadow-sm border p-8 flex items-center justify-between">
@@ -230,7 +230,6 @@ export default function Dashboard() {
                         <div className="p-6 border-b flex items-center justify-between">
                             <h3 className="text-lg font-bold text-gray-900">Requests for Quotation (RFQs)</h3>
                             <div className="flex gap-2">
-                                <button className="p-2 border rounded-lg hover:bg-gray-50 text-gray-600"><Filter className="h-4 w-4" /></button>
                                 <Link href="/dashboard/rfq/create" className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all">
                                     <Plus className="h-4 w-4" />
                                     Create RFQ
